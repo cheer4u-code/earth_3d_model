@@ -12,7 +12,7 @@
     }
 
     #info {
-      color: lightgrey;
+      color: #888888;
       position: absolute;
       top: 10px;
       width: 100%;
@@ -139,15 +139,17 @@
     const automaticallyGenerated = document.getElementById('automatically_generated');
     // GLTFLoader: https://threejs.org/docs/#examples/en/loaders/GLTFLoader
     const loader = new GLTFLoader();
-    loader.load(
+    loader.loadAsync(
       // Earth_1_12756.glb: Earth 3D Model:
       //  https://science.nasa.gov/resource/earth-3d-model/ の読み込み
       "Earth_1_12756.glb",
       // EarthClouds_1_12756.glb: Earth with Clouds 3D Model:
       //  https://science.nasa.gov/resource/earth-with-clouds-3d-model/
       // "EarthClouds_1_12756.glb",
-      // リソースがロードされたときに呼び出される
-      function (gltf) {
+      xhr => {
+        automaticallyGenerated.innerText = Math.round((xhr.loaded / xhr.total) * 100) + "% loaded";
+      })
+      .then(gltf => {
         const earth = gltf.scene;
         scene.add(earth);
         const boundingBox = new THREE.Box3().setFromObject(earth);
@@ -155,16 +157,10 @@
         automaticallyGenerated.innerText = `Size of Earth 3D Model: x=${boxSize.x}, y=${boxSize.y}, z=${boxSize.z}`;
         const siderealTime = getSiderealTime(JD);
         earth.rotation.y = -Math.PI / 2 + siderealTime * Math.PI * 2 / 24;
-      },
-      // 読み込み中に呼び出される
-      function (xhr) {
-        automaticallyGenerated.innerText = Math.round((xhr.loaded / xhr.total) * 100) + "% loaded";
-      },
-      // 読み込みエラーが発生したときに呼び出される
-      function (error) {
+      })
+      .catch(error => {
         automaticallyGenerated.innerText = error;
-      }
-    );
+      });
 
     function animate() {
       requestAnimationFrame(animate);
