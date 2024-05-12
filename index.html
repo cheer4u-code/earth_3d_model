@@ -121,22 +121,23 @@
 
     function getSiderealTime(JD) {
       // Computing Approximate Sidereal Time: https://aa.usno.navy.mil/faq/GAST
-      return (18.697375 + 24.065709824279 * (JD - 2451545.0)) % 24
+      return (18.697375 + 24.065709824279 * (JD - 2451545.0)) % 24;
     }
 
     const JD = julianDayNumber(new Date());
 
-    // 平行光源
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 4);
-    scene.add(directionalLight);
+    function initLight() {
+      // 平行光源
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 4);
+      scene.add(directionalLight);
+      const sunDirection = getSunDirection(JD);
+      directionalLight.position.set(sunDirection.x, sunDirection.z, -sunDirection.y);
+      scene.add(new THREE.DirectionalLightHelper(directionalLight, 600, 0x888888));
 
-    const sunDirection = getSunDirection(JD);
-    directionalLight.position.set(sunDirection.x, sunDirection.z, -sunDirection.y);
-    scene.add(new THREE.DirectionalLightHelper(directionalLight, 600, 0x888888));
-
-    // 環境光源
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-    scene.add(ambientLight);
+      // 環境光源
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+      scene.add(ambientLight);
+    }
 
     const automaticallyGenerated = document.getElementById('automatically_generated');
     // GLTFLoader: https://threejs.org/docs/#examples/en/loaders/GLTFLoader
@@ -159,6 +160,8 @@
         automaticallyGenerated.innerText = `Size of Earth 3D Model: x=${boxSize.x}, y=${boxSize.y}, z=${boxSize.z}`;
         const siderealTime = getSiderealTime(JD);
         earth.rotation.y = -Math.PI / 2 + siderealTime * Math.PI * 2 / 24;
+
+        initLight();
       })
       .catch(error => {
         automaticallyGenerated.innerText = error;
