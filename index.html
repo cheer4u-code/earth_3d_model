@@ -26,9 +26,9 @@
   <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
-          "three/addons/controls/OrbitControls": "https://unpkg.com/three@0.164.1/examples/jsm/controls/OrbitControls.js",
-          "three/addons/loaders/GLTFLoader": "https://unpkg.com/three@0.164.1/examples/jsm/loaders/GLTFLoader.js"
+          "three": "https://unpkg.com/three@0.177.0/build/three.module.js",
+          "three/addons/controls/OrbitControls": "https://unpkg.com/three@0.177.0/examples/jsm/controls/OrbitControls.js",
+          "three/addons/loaders/GLTFLoader": "https://unpkg.com/three@0.177.0/examples/jsm/loaders/GLTFLoader.js"
         }
       }
     </script>
@@ -37,6 +37,7 @@
     <div id="automatically_generated">
     </div>
   </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/6.0.1/satellite.min.js"></script>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls';
@@ -48,94 +49,51 @@
     document.body.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
 
+    const scale = 500 / 6378.137;
+
     // XYZ軸を表示
-    const axesHelper = new THREE.AxesHelper(700);
+    const axesHelper = new THREE.AxesHelper(10000 * scale);
     scene.add(axesHelper);
+
+    const now = new Date();
+    // const now = new Date('2025-3-21 12:00:00+0:00');
+    const jday = satellite.jday(now);
+    const gmst = satellite.gstime(now);
 
     // カメラ
     const camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
       1,
-      10000
+      100000 * scale
     );
-    camera.position.set(1000, 100, 100);
+    (() => {
+      const eci = satellite.ecfToEci(satellite.geodeticToEcf({
+        longitude: satellite.degreesToRadians(150.0),
+        latitude: 0.0,
+        height: 100000 * scale
+      }), gmst)
+      camera.position.set(eci.y * scale, eci.z * scale, eci.x * scale);
+    })();
     const controls = new OrbitControls(camera, renderer.domElement);
-
-    function julianDayNumber(date) {
-      // Converting Between Julian Dates and Gregorian Calendar Dates:
-      //  https://aa.usno.navy.mil/faq/JD_formula
-      const K = date.getUTCFullYear(),
-        M = date.getUTCMonth() + 1,
-        I = date.getUTCDate(),
-        UT = date.getUTCHours() + (date.getUTCMinutes() + (date.getUTCSeconds()
-          + date.getUTCMilliseconds() / 1000) / 60) / 60;
-      return 367 * K - parseInt((7 * (K + parseInt((M + 9) / 12))) / 4)
-        + parseInt((275 * M) / 9) + I + 1721013.5 + UT / 24
-        - 0.5 * Math.sign(100 * K + M - 190002.5) + 0.5;
-    }
-
-    function getSunDirection(JD) {
-      // Position of the Sun:
-      //  https://en.wikipedia.org/wiki/Position_of_the_Sun
-      // Algorithm Theoretical Basis Document:
-      //  https://icesat-2.gsfc.nasa.gov/sites/default/files/page_files/ICESat2_ATL03g_ATBD_r002.pdf
-      const T = (JD - 2451545.0) / 36525;
-      // 平均黄経 mean longitude of the Sun
-      const L = 280.460 + 36000.77005361 * T;
-      // 平均近点角 mean anomaly of the Sun
-      const gRad = (
-        357.528 + 35999.05034 * T
-      ) * Math.PI / 180;
-
-      // 黄道座標 ecliptic coordinate system
-      // 黄経 ecliptic longitude
-      const lambdaRad = (
-        L + 1.914666471 * Math.sin(gRad) + 0.019994643 * Math.sin(2 * gRad)
-      ) * Math.PI / 180;
-      // 黄道傾斜 Obliquity of the ecliptic
-      const epsilonRad = (
-        23.439291 - 0.0130042 * T
-      ) * Math.PI / 180;
-      // 地球と太陽との距離、単位は天文単位(au) distance of the Sun from the Earth, in astronomical units
-      // const R = 1.000140612 - 0.016708617 * Math.cos(gRad) - 0.000139589 * Math.cos(2 * gRad);
-      // const sunPosition = {
-      //   x: R * Math.cos(lambdaRad),
-      //   y: R * Math.cos(epsilonRad) * Math.sin(lambdaRad),
-      //   z: R * Math.sin(epsilonRad) * Math.sin(lambdaRad),
-      // };
-      const normalize = {
-        x: Math.cos(lambdaRad),
-        y: Math.cos(epsilonRad) * Math.sin(lambdaRad),
-        z: Math.sin(epsilonRad) * Math.sin(lambdaRad),
-      };
-
-      // 赤道座標 equatorial coordinate system
-      // 赤経(α) Right ascension
-      // const rightAscensionRad = Math.atan2(Math.cos(epsilonRad) * Math.sin(lambdaRad), Math.cos(lambdaRad));
-      // 赤緯(δ) Declination
-      // const declinationRad = Math.asin(Math.sin(epsilonRad) * Math.sin(lambdaRad));
-
-      return normalize;
-    }
-
-    function getSiderealTime(JD) {
-      // Computing Approximate Sidereal Time: https://aa.usno.navy.mil/faq/GAST
-      return (18.697375 + 24.065709824279 * (JD - 2451545.0)) % 24;
-    }
-
-    const JD = julianDayNumber(new Date());
 
     function initLight() {
       // 平行光源
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 4);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 10);
+      const rsun = satellite.sunPos(jday).rsun;
+      directionalLight.position.set(rsun[1], rsun[2], rsun[0]);
       scene.add(directionalLight);
-      const sunDirection = getSunDirection(JD);
-      directionalLight.position.set(sunDirection.x, sunDirection.z, -sunDirection.y);
-      scene.add(new THREE.DirectionalLightHelper(directionalLight, 600, 0x888888));
-
+      scene.add(new THREE.DirectionalLightHelper(directionalLight, 8000 * scale, 0x888888));
+      const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+              new THREE.Vector3(0, 0, 0),
+              new THREE.Vector3(rsun[1] * 8000 * scale, rsun[2] * 8000 * scale, rsun[0] * 8000 * scale)
+          ]),
+          new THREE.LineBasicMaterial({color: 0x888888})
+      );
+      scene.add(line)
       // 環境光源
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 2);
       scene.add(ambientLight);
     }
 
@@ -158,8 +116,7 @@
         const boundingBox = new THREE.Box3().setFromObject(earth);
         const boxSize = boundingBox.getSize(new THREE.Vector3());
         automaticallyGenerated.innerText = `Size of Earth 3D Model: x=${boxSize.x}, y=${boxSize.y}, z=${boxSize.z}`;
-        const siderealTime = getSiderealTime(JD);
-        earth.rotation.y = -Math.PI / 2 + siderealTime * Math.PI * 2 / 24;
+        earth.rotation.y = Math.PI + gmst;
 
         initLight();
       })
