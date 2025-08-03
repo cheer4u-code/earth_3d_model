@@ -49,10 +49,8 @@
     document.body.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
 
-    const scale = 500 / 6378.137;
-
     // XYZ軸を表示
-    const axesHelper = new THREE.AxesHelper(10000 * scale);
+    const axesHelper = new THREE.AxesHelper(10000);
     scene.add(axesHelper);
 
     const now = new Date();
@@ -65,15 +63,22 @@
       75,
       window.innerWidth / window.innerHeight,
       1,
-      100000 * scale
+      100000
     );
+
+    function geodeticToEci(longitude, latitude, height) {
+      const ecf = satellite.geodeticToEcf({
+        longitude: satellite.degreesToRadians(longitude),
+        latitude: satellite.degreesToRadians(latitude),
+        height: height
+      });
+      const eci = satellite.ecfToEci(ecf, gmst);
+      return new THREE.Vector3(eci.y, eci.z, eci.x);
+    }
+
     (() => {
-      const eci = satellite.ecfToEci(satellite.geodeticToEcf({
-        longitude: satellite.degreesToRadians(150.0),
-        latitude: 0.0,
-        height: 100000 * scale
-      }), gmst)
-      camera.position.set(eci.y * scale, eci.z * scale, eci.x * scale);
+      const eci = geodeticToEci(150.0, 0.0, 10000);
+      camera.position.copy(eci);
     })();
     const controls = new OrbitControls(camera, renderer.domElement);
 
@@ -83,18 +88,55 @@
       const rsun = satellite.sunPos(jday).rsun;
       directionalLight.position.set(rsun[1], rsun[2], rsun[0]);
       scene.add(directionalLight);
-      scene.add(new THREE.DirectionalLightHelper(directionalLight, 8000 * scale, 0x888888));
+      const lineLen = 10000;
+      scene.add(new THREE.DirectionalLightHelper(directionalLight, lineLen, 0x888888));
       const line = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints([
-              new THREE.Vector3(0, 0, 0),
-              new THREE.Vector3(rsun[1] * 8000 * scale, rsun[2] * 8000 * scale, rsun[0] * 8000 * scale)
-          ]),
-          new THREE.LineBasicMaterial({color: 0x888888})
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(rsun[1] * lineLen, rsun[2] * lineLen, rsun[0] * lineLen)
+        ]),
+        new THREE.LineBasicMaterial({ color: 0x888888 })
       );
       scene.add(line)
       // 環境光源
       const ambientLight = new THREE.AmbientLight(0xffffff, 2);
       scene.add(ambientLight);
+    }
+
+    function textSprite(text) {
+      const canvas = document.createElement('canvas');
+      const fontSize = 200;
+      canvas.height = fontSize;
+      const context = canvas.getContext('2d');
+      const font = `${fontSize}px Arial`;
+      context.font = font;
+      const metrics = context.measureText(text);
+      canvas.width = metrics.width;
+      //context.fillStyle = '#ffffff'; // Background color
+      //context.fillRect(0, 0, canvas.width, canvas.height);
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillStyle = '#888888';
+      context.font = font; // need to set again
+      context.fillText(text, canvas.width / 2, canvas.height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+      sprite.scale.set(canvas.width, canvas.height, 1);
+      sprite.center = new THREE.Vector2(0.5, 0.5);
+      return sprite;
+    }
+
+    function mark(text, longitude, latitude) {
+      const eci0 = geodeticToEci(longitude, latitude, 300);
+      const sprite = textSprite(text);
+      sprite.position.copy(eci0);
+      scene.add(sprite);
+      const eci1 = geodeticToEci(longitude, latitude, 0);
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([eci0, eci1]),
+        new THREE.LineBasicMaterial({ color: 0x888888 })
+      );
+      scene.add(line)
     }
 
     const automaticallyGenerated = document.getElementById('automatically_generated');
@@ -111,14 +153,24 @@
         automaticallyGenerated.innerText = Math.round((xhr.loaded / xhr.total) * 100) + '% loaded';
       })
       .then(gltf => {
+        const earthSemiMajorAxis = 6378.1370;
+        const earthSemiMinorAxes = 6356.7523;
         const earth = gltf.scene;
         scene.add(earth);
         const boundingBox = new THREE.Box3().setFromObject(earth);
         const boxSize = boundingBox.getSize(new THREE.Vector3());
         automaticallyGenerated.innerText = `Size of Earth 3D Model: x=${boxSize.x}, y=${boxSize.y}, z=${boxSize.z}`;
+        earth.scale.x = earthSemiMajorAxis * 2 / boxSize.x;
+        earth.scale.y = earthSemiMinorAxes * 2 / boxSize.y;
+        earth.scale.z = earthSemiMajorAxis * 2 / boxSize.z;
+        const boundingBox2 = new THREE.Box3().setFromObject(earth);
+        const boxSize2 = boundingBox2.getSize(new THREE.Vector3());
+        automaticallyGenerated.innerText += ` -> x=${boxSize2.x}, y=${boxSize2.y}, z=${boxSize2.z}`;
         earth.rotation.y = Math.PI + gmst;
 
         initLight();
+
+        mark('Tokyo', 139.7535, 35.694);
       })
       .catch(error => {
         automaticallyGenerated.innerText = error;
