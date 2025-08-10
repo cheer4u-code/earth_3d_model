@@ -43,6 +43,8 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader';
 
+    THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
     const renderer = new THREE.WebGLRenderer();
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1;
@@ -73,7 +75,8 @@
         height: height
       });
       const eci = satellite.ecfToEci(ecf, gmst);
-      return new THREE.Vector3(eci.y, eci.z, eci.x);
+      // return new THREE.Vector3(eci.y, eci.z, eci.x);
+      return new THREE.Vector3(eci.x, eci.y, eci.z);
     }
 
     (() => {
@@ -86,14 +89,16 @@
       // 平行光源
       const directionalLight = new THREE.DirectionalLight(0xffffff, 10);
       const rsun = satellite.sunPos(jday).rsun;
-      directionalLight.position.set(rsun[1], rsun[2], rsun[0]);
+      // directionalLight.position.set(rsun[1], rsun[2], rsun[0]);
+      directionalLight.position.set(rsun[0], rsun[1], rsun[2]);
       scene.add(directionalLight);
       const lineLen = 10000;
       scene.add(new THREE.DirectionalLightHelper(directionalLight, lineLen, 0x888888));
       const line = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(rsun[1] * lineLen, rsun[2] * lineLen, rsun[0] * lineLen)
+          // new THREE.Vector3(rsun[1] * lineLen, rsun[2] * lineLen, rsun[0] * lineLen)
+          new THREE.Vector3(rsun[0] * lineLen, rsun[1] * lineLen, rsun[2] * lineLen)
         ]),
         new THREE.LineBasicMaterial({ color: 0x888888 })
       );
@@ -166,7 +171,9 @@
         const boundingBox2 = new THREE.Box3().setFromObject(earth);
         const boxSize2 = boundingBox2.getSize(new THREE.Vector3());
         automaticallyGenerated.innerText += ` -> x=${boxSize2.x}, y=${boxSize2.y}, z=${boxSize2.z}`;
-        earth.rotation.y = Math.PI + gmst;
+        // earth.rotation.y = Math.PI + gmst;
+        earth.rotation.x = Math.PI / 2;
+        earth.rotation.y = -Math.PI / 2 + gmst;
 
         initLight();
 
